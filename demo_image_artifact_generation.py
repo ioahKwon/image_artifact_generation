@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from scipy.stats import poisson
 from scipy.io import loadmat
 
+from skimage.data import shepp_logan_phantom
+from skimage.transform import radon, iradon, rescale
+
 ## Load image
 img = plt.imread("Lenna.png")
 
@@ -142,6 +145,94 @@ plt.subplot(133)
 plt.imshow(np.squeeze(dst), cmap=cmap, vmin=0, vmax=1)
 plt.title('Noisy Image')
 
+
+## 2-3. Denoising: poisson noise (CT-domain)
+# SYSTEM SETTING
+N = 512
+ANG = 180
+VIEW = 360
+THETA = np.linspace(0, ANG, VIEW, endpoint=False)
+
+A = lambda x: radon(x, THETA, circle=False).astype(np.float32)
+AT = lambda y: iradon(y, THETA, circle=False, filter=None, output_size=N).astype(np.float32)
+AINV = lambda y: iradon(y, THETA, circle=False, output_size=N).astype(np.float32)
+
+# Low dose CT: adding poisson noise
+pht = shepp_logan_phantom()
+pht = 0.03 * rescale(pht, scale=512/400, order=0)
+
+prj = A(pht)
+
+i0 = 1e4
+dst = i0 * np.exp(-prj)
+dst = poisson.rvs(dst)
+dst = -np.log(dst / i0)
+dst[dst < 0] = 0
+
+noise = dst - prj
+
+rec = AINV(prj)
+rec_noise = AINV(noise)
+rec_dst = AINV(dst)
+
+plt.subplot(241)
+plt.imshow(pht, cmap='gray', vmin=0, vmax=0.03)
+plt.title("Ground Truth")
+
+plt.subplot(242)
+plt.imshow(rec, cmap='gray', vmin=0, vmax=0.03)
+plt.title("Reconstruction")
+
+plt.subplot(243)
+plt.imshow(rec_noise, cmap='gray')
+plt.title("Reconstruction using Noise")
+
+plt.subplot(244)
+plt.imshow(rec_dst, cmap='gray', vmin=0, vmax=0.03)
+plt.title("Reconstruction using Noisy data")
+
+plt.subplot(246)
+plt.imshow(prj, cmap='gray')
+plt.title("Projection data")
+
+plt.subplot(247)
+plt.imshow(noise, cmap='gray')
+plt.title("Poisson Noise in projection")
+
+plt.subplot(248)
+plt.imshow(dst, cmap='gray')
+plt.title("Noisy data")
+
+## 3. Super-resolution
+"""
+------------------------
+order options
+------------------------
+0: Nearest-neighbor
+1: Bi-linear (default)
+2: Bi-quadratic
+3: Bi-cubic
+4: Bi-quartic
+5: Bi-quintic
+"""
+
+dw = 1/5.0 # downsampling ratio -> 5배
+order = 1
+
+dst_dw = rescale(img, scale=(dw, dw, 1), order=order)
+dst_up = rescale(dst_dw, scale=(1/dw, 1/dw, 1), order=order)
+
+plt.subplot(131)
+plt.imshow(np.squeeze(img), cmap=cmap, vmin=0, vmax=1)
+plt.title("Ground Truth")
+
+plt.subplot(132)
+plt.imshow(np.squeeze(dst_dw), cmap=cmap, vmin=0, vmax=1)
+plt.title("Downscaled image")
+
+plt.subplot(133)
+plt.imshow(np.squeeze(dst_up), cmap=cmap, vmin=0, vmax=1)
+plt.title("Upscaled image")
 
 ##
 
